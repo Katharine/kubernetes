@@ -443,6 +443,50 @@ kube::golang::outfile_for_binary() {
   echo "${output_path}/${bin}"
 }
 
+kube::golang::generate_test_fake() {
+  local package=$1
+  local path="/go/src/$package"
+  local name=`basename $package`
+  cat <<EOF > "$path/`basename $package`_test.go"
+package main
+
+import (
+	"os"
+	"testing"
+
+	"github.com/dlespiau/covertool/pkg/cover"
+	"github.com/dlespiau/covertool/pkg/exit"
+)
+
+
+func TestMain(m *testing.M) {
+  args := []string{os.Args[0], "-test.coverprofile=/tmp/k8s-${name}.cov", "--"}
+	os.Args = append(args, os.Args[1:]...)
+
+	cover.ParseAndStripTestFlags()
+
+  os.Args = append([]string{os.Args[0]}, os.Args[2:]...)
+
+	exit.AtExit(cover.FlushProfiles)
+
+  main()
+  exit.Exit(0)
+}
+
+EOF
+}
+
+kube::golang::build_instrumented_binary() {
+  local package=$1
+  kube::golang::generate_test_fake "$package"
+  V=2 kube::log::info "Building $package as instrumented test package. CGO_ENABLED=${CGO_ENABLED-}"
+  go test -c -o "$(kube::golang::outfile_for_binary "$package" "$platform")" \
+    -covermode count "${goflags[@]:+${goflags[@]}}" \
+    -gcflags "${gogcflags}" \
+    -ldflags "${goldflags}" \
+    "$package"
+}
+
 kube::golang::build_binaries_for_platform() {
   local platform=$1
 
@@ -463,17 +507,23 @@ kube::golang::build_binaries_for_platform() {
   done
 
   if [[ "${#statics[@]}" != 0 ]]; then
-    CGO_ENABLED=0 go install -installsuffix static "${goflags[@]:+${goflags[@]}}" \
-      -gcflags "${gogcflags}" \
-      -ldflags "${goldflags}" \
-      "${statics[@]:+${statics[@]}}"
+#    CGO_ENABLED=0 go install -installsuffix static "${goflags[@]:+${goflags[@]}}" \
+#      -gcflags "${gogcflags}" \
+#      -ldflags "${goldflags}" \
+#      "${statics[@]:+${statics[@]}}"
+    for static in ${statics[@]}; do
+      CGO_ENABLED=0 kube::golang::build_instrumented_binary "$static"
+    done
   fi
 
   if [[ "${#nonstatics[@]}" != 0 ]]; then
-    go install "${goflags[@]:+${goflags[@]}}" \
-      -gcflags "${gogcflags}" \
-      -ldflags "${goldflags}" \
-      "${nonstatics[@]:+${nonstatics[@]}}"
+#    go install "${goflags[@]:+${goflags[@]}}" \
+#      -gcflags "${gogcflags}" \
+#      -ldflags "${goldflags}" \
+#      "${nonstatics[@]:+${nonstatics[@]}}"
+    for nonstatic in ${nonstatics[@]}; do
+      kube::golang::build_instrumented_binary "$nonstatic"
+    done
   fi
 
   for test in "${tests[@]:+${tests[@]}}"; do
@@ -566,6 +616,9 @@ kube::golang::build_binaries() {
 
     local binaries
     binaries=($(kube::golang::binaries_from_targets "${targets[@]}"))
+
+    # HACK: get rid of this! (vendor it?)
+    go get github.com/dlespiau/covertool
 
     local parallel=false
     if [[ ${#platforms[@]} -gt 1 ]]; then
