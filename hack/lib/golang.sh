@@ -445,14 +445,16 @@ kube::golang::outfile_for_binary() {
 
 kube::golang::generate_test_fake() {
   local package=$1
-  local path="/go/src/$package"
+  local path="$GOPATH/src/$package"
   local name=`basename $package`
   cat <<EOF > "$path/`basename $package`_test.go"
 package main
 
 import (
 	"os"
+	"strconv"
 	"testing"
+	"time"
 
 	"github.com/dlespiau/covertool/pkg/cover"
 	"github.com/dlespiau/covertool/pkg/exit"
@@ -460,7 +462,8 @@ import (
 
 
 func TestMain(m *testing.M) {
-  args := []string{os.Args[0], "-test.coverprofile=/tmp/k8s-${name}.cov", "--"}
+  now := time.Now().UnixNano()
+  args := []string{os.Args[0], "-test.coverprofile=/tmp/k8s-${name}-" + strconv.FormatInt(now, 10) + ".cov", "--"}
 	os.Args = append(args, os.Args[1:]...)
 
 	cover.ParseAndStripTestFlags()
