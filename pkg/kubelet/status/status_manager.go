@@ -38,7 +38,6 @@ import (
 	kubetypes "k8s.io/kubernetes/pkg/kubelet/types"
 	"k8s.io/kubernetes/pkg/kubelet/util/format"
 	statusutil "k8s.io/kubernetes/pkg/util/pod"
-	"github.com/dlespiau/covertool/pkg/cover"
 )
 
 // A wrapper around v1.PodStatus that includes a version to enforce that stale pod statuses are
@@ -457,8 +456,6 @@ func (m *manager) syncBatch() {
 			}
 		}
 	}()
-
-	cover.FlushProfiles()
 
 	for _, update := range updatedStatuses {
 		glog.V(5).Infof("Status Manager: syncPod in syncbatch. pod UID: %q", update.podUID)

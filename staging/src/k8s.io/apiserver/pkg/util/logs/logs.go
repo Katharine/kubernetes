@@ -21,6 +21,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/dlespiau/covertool/pkg/cover"
 	"github.com/golang/glog"
 	"github.com/spf13/pflag"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -56,11 +57,19 @@ func InitLogs() {
 	log.SetFlags(0)
 	// The default glog flush interval is 5 seconds.
 	go wait.Forever(glog.Flush, *logFlushFreq)
+
+	// HACK: flush profiling information periodically.
+	// TODO: this should definitely only happen if we actually have profiling going on.
+	go wait.Forever(cover.FlushProfiles, 10 * time.Second)
 }
 
 // FlushLogs flushes logs immediately.
 func FlushLogs() {
 	glog.Flush()
+
+	// HACK: flush profile whenever we flush logs (i.e. at the end of execution)
+	// TODO: this should definitely only happen if we actually have profiling going on.
+	cover.FlushProfiles()
 }
 
 // NewLogger creates a new log.Logger which sends logs to glog.Info.
