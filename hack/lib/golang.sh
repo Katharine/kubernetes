@@ -478,12 +478,19 @@ EOF
 
 kube::golang::build_instrumented_binary() {
   local package=$1
+  local extra=''
+  if [ "${CGO_ENABLED-}" == "0" ]; then
+    extra="-installsuffix=static"
+  fi
   kube::golang::generate_test_fake "$package"
-  V=2 kube::log::info "Building $package as instrumented test package. CGO_ENABLED=${CGO_ENABLED-}"
+  V=2 kube::log::info "Building $package as instrumented test package. CGO_ENABLED=${CGO_ENABLED-}, extra=${extra}"
+
   go test -c -o "$(kube::golang::outfile_for_binary "$package" "$platform")" \
     -covermode count "${goflags[@]:+${goflags[@]}}" \
+    -coverpkg k8s.io/... \
     -gcflags "${gogcflags}" \
     -ldflags "${goldflags}" \
+    $extra \
     "$package"
 }
 
