@@ -447,7 +447,7 @@ kube::golang::generate_dummy_test() {
   local package=$1
   local path="$GOPATH/src/$package"
   local name=`basename $package`
-  cat <<EOF > "$path/`basename $package`_test.go"
+  cat <<EOF > "$path/${name}_test.go"
 package main
 
 import (
