@@ -443,7 +443,7 @@ kube::golang::outfile_for_binary() {
   echo "${output_path}/${bin}"
 }
 
-kube::golang::generate_test_fake() {
+kube::golang::generate_dummy_test() {
   local package=$1
   local path="$GOPATH/src/$package"
   local name=`basename $package`
@@ -485,7 +485,7 @@ kube::golang::build_instrumented_binary() {
   if [ "${CGO_ENABLED-}" == "0" ]; then
     extra="-installsuffix=static"
   fi
-  kube::golang::generate_test_fake "$package"
+  kube::golang::generate_dummy_test "$package"
   V=2 kube::log::info "Building $package as instrumented test package. CGO_ENABLED=${CGO_ENABLED-}, extra=${extra}"
 
   go test -c -o "$(kube::golang::outfile_for_binary "$package" "$platform")" \
