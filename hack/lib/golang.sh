@@ -443,40 +443,59 @@ kube::golang::outfile_for_binary() {
   echo "${output_path}/${bin}"
 }
 
+kube::golang::path_for_dummy_test() {
+  local package=$1
+  local path="$GOPATH/src/$package"
+  local name=$(basename $package)
+  echo "$path/${name}_test.go"
+}
+
 kube::golang::generate_dummy_test() {
   local package=$1
   local path="$GOPATH/src/$package"
-  local name=`basename $package`
-  cat <<EOF > "$path/${name}_test.go"
+  local name=$(basename "$package")
+  cat <<EOF > $(kube::golang::path_for_dummy_test "$package")
 package main
 
 import (
+  "flag"
 	"os"
 	"strconv"
 	"testing"
 	"time"
 
 	"github.com/dlespiau/covertool/pkg/cover"
-	"github.com/dlespiau/covertool/pkg/exit"
 )
 
 
 func TestMain(m *testing.M) {
+  // We need to pass coverage instructions to the unittest framework, so we hijack os.Args
+  original_args := os.Args
+
   now := time.Now().UnixNano()
-  args := []string{os.Args[0], "-test.coverprofile=/tmp/k8s-${name}-" + strconv.FormatInt(now, 10) + ".cov", "--"}
-	os.Args = append(args, os.Args[1:]...)
+  test_args := []string{os.Args[0], "-test.coverprofile=/tmp/k8s-${name}-" + strconv.FormatInt(now, 10) + ".cov"}
+  os.Args = test_args
+  // This is sufficient for the unit tests to be set up.
+  flag.Parse()
 
-	cover.ParseAndStripTestFlags()
+  // Restore the original args for use by the program.
+	os.Args = original_args
 
-  os.Args = append([]string{os.Args[0]}, os.Args[2:]...)
-
-	exit.AtExit(cover.FlushProfiles)
-
+	// Go!
   main()
-  exit.Exit(0)
+
+  // Make sure we actually write the profiling information to disk, if we make it here.
+  // On long-running services, or anything that calls os.Exit(), this is insufficient,
+  // so be sure to call this from inside the binary too.
+  cover.FlushProfiles()
 }
 
 EOF
+}
+
+kube::golang::delete_dummy_test() {
+  local package=$1
+  rm $(kube::golang::path_for_dummy_test "$package")
 }
 
 kube::golang::build_instrumented_binary() {
@@ -495,6 +514,7 @@ kube::golang::build_instrumented_binary() {
     -ldflags "${goldflags}" \
     $extra \
     "$package"
+  kube::golang::delete_dummy_test "$package"
 }
 
 kube::golang::build_binaries_for_platform() {
